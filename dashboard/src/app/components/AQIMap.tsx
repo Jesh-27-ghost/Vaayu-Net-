@@ -13,35 +13,79 @@ interface AQIMapProps {
   simProgress: number;
   origin: string;
   destination: string;
+  cargoType: string;
 }
 
-// Coordinate paths for routes
-// Standard Route passes through highly polluted areas (Okhla etc)
-const stdPoints: [number, number][] = [
-  [28.7300, 77.1700], // Azadpur
-  [28.6600, 77.2100], 
-  [28.6000, 77.2400], 
-  [28.5300, 77.2800], // Okhla Traffic
-  [28.4500, 77.3000], // South/Faridabad Border
-];
-
-// Fresh Route bypasses pollution via greener corridors
-const freshPoints: [number, number][] = [
-  [28.7300, 77.1700], // Azadpur
-  [28.6800, 77.1500],
-  [28.6200, 77.1300], // Ridge area
-  [28.5500, 77.1800], // Green belt
-  [28.4800, 77.2400], 
-  [28.4500, 77.3000], // Destination
-];
+const LOCATIONS: Record<string, [number, number]> = {
+  'Azadpur Mandi': [28.7300, 77.1700],
+  'Ghazipur Mandi': [28.6200, 77.3300],
+  'Okhla Mandi': [28.5300, 77.2800],
+  'Narela Mandi': [28.8500, 77.1000],
+  'South Delhi': [28.4500, 77.2000],
+  'Gurugram': [28.4500, 77.0500],
+  'Noida': [28.5800, 77.3300],
+  'Faridabad': [28.4200, 77.3200],
+  'Greater Noida': [28.4700, 77.4900],
+};
 
 const HOTSPOTS = [
+  // Hazardous (Red)
   { lat: 28.5300, lng: 77.2800, aqi: 480, name: 'Okhla Industrial' },
-  { lat: 28.6600, lng: 77.3000, aqi: 380, name: 'Anand Vihar' },
-  { lat: 28.6100, lng: 77.2300, aqi: 340, name: 'Central Delhi' },
-  { lat: 28.6900, lng: 77.1400, aqi: 150, name: 'West Green Zone' },
-  { lat: 28.4200, lng: 77.3200, aqi: 120, name: 'Faridabad Green Belt' }
+  { lat: 28.6600, lng: 77.3000, aqi: 410, name: 'Anand Vihar' },
+  { lat: 28.7300, lng: 77.1700, aqi: 380, name: 'Azadpur Traffic' },
+  { lat: 28.6100, lng: 77.0300, aqi: 350, name: 'Dwarka Sec 8' },
+  { lat: 28.6500, lng: 77.1000, aqi: 360, name: 'Punjabi Bagh' },
+  { lat: 28.7000, lng: 77.1000, aqi: 390, name: 'Rohini Sector 16' },
+  { lat: 28.5000, lng: 77.0800, aqi: 320, name: 'Cyber City, Gurgaon' },
+  { lat: 28.5800, lng: 77.3300, aqi: 400, name: 'Noida Sector 62' },
+  { lat: 28.6600, lng: 77.4400, aqi: 450, name: 'Ghaziabad Industrial' },
+
+  // Moderate (Orange)
+  { lat: 28.6100, lng: 77.2300, aqi: 240, name: 'Central Delhi' },
+  { lat: 28.5500, lng: 77.2000, aqi: 210, name: 'Hauz Khas' },
+  { lat: 28.5600, lng: 77.1000, aqi: 280, name: 'IGI Airport' },
+  { lat: 28.4500, lng: 77.0500, aqi: 250, name: 'Gurugram NH-48' },
+  { lat: 28.5300, lng: 77.3500, aqi: 220, name: 'Noida Sec 137' },
+  { lat: 28.6700, lng: 77.2200, aqi: 290, name: 'ISBT Kashmiri Gate' },
+
+  // Good/Green (Green)
+  { lat: 28.6900, lng: 77.1400, aqi: 85, name: 'West Green Zone' },
+  { lat: 28.4200, lng: 77.3200, aqi: 90, name: 'Faridabad Green Belt' },
+  { lat: 28.5300, lng: 77.1500, aqi: 75, name: 'Vasant Kunj Ridge' },
+  { lat: 28.6100, lng: 77.1800, aqi: 65, name: 'Buddha Jayanti Park' },
+  { lat: 28.5800, lng: 77.2400, aqi: 80, name: 'Lodhi Gardens' },
+  { lat: 28.5000, lng: 77.2500, aqi: 90, name: 'Asola Bhatti Sanctuary' }
 ];
+
+const generateRoute = (startName: string, endName: string, type: 'std' | 'fresh', cargo: string): [number, number][] => {
+  const start = LOCATIONS[startName] || LOCATIONS['Azadpur Mandi'];
+  const end = LOCATIONS[endName] || LOCATIONS['South Delhi'];
+  
+  const dx = end[1] - start[1];
+  const dy = end[0] - start[0];
+  const mx = start[1] + dx / 2;
+  const my = start[0] + dy / 2;
+
+  const px = -dy;
+  const py = dx;
+
+  // Add slight variance based on cargo type
+  const cargoShift = cargo === 'Vegetables' ? 0.05 : cargo === 'Dairy' ? -0.05 : 0;
+  
+  // Standard curves slightly, Fresh curves significantly to bypass
+  const factor = type === 'std' ? 0.05 : 0.35;
+  
+  const cx = mx + px * (factor + cargoShift);
+  const cy = my + py * (factor + cargoShift);
+
+  return [
+    start,
+    [start[0] + dy*0.25 + py*(factor*0.5), start[1] + dx*0.25 + px*(factor*0.5)],
+    [cy, cx],
+    [start[0] + dy*0.75 + py*(factor*0.5), start[1] + dx*0.75 + px*(factor*0.5)],
+    end
+  ];
+};
 
 export default function AQIMap({
   routeCalculated,
@@ -49,6 +93,7 @@ export default function AQIMap({
   simProgress,
   origin,
   destination,
+  cargoType,
 }: AQIMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<Map | null>(null);
@@ -56,6 +101,11 @@ export default function AQIMap({
   const freshRouteLayer = useRef<Polyline | null>(null);
   const truckALayer = useRef<CircleMarker | null>(null);
   const truckBLayer = useRef<CircleMarker | null>(null);
+  const originMarkerGroup = useRef<L.LayerGroup | null>(null);
+  const destMarkerGroup = useRef<L.LayerGroup | null>(null);
+
+  const stdPoints = useMemo(() => generateRoute(origin, destination, 'std', cargoType), [origin, destination, cargoType]);
+  const freshPoints = useMemo(() => generateRoute(origin, destination, 'fresh', cargoType), [origin, destination, cargoType]);
 
   // Initialize Map
   useEffect(() => {
@@ -101,17 +151,6 @@ export default function AQIMap({
         }).addTo(map);
       });
 
-      // Markers for Origin / Dest
-      L.circleMarker(stdPoints[0], { radius: 6, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map);
-      L.marker(stdPoints[0], {
-        icon: L.divIcon({ className: '', html: '<div style="color:#93c5fd; font-size:12px; font-weight:bold; margin-top:-20px; white-space:nowrap;">📍 Azadpur Origin</div>' })
-      }).addTo(map);
-
-      L.circleMarker(stdPoints[stdPoints.length-1], { radius: 6, color: '#a78bfa', fillColor: '#a78bfa', fillOpacity: 1 }).addTo(map);
-      L.marker(stdPoints[stdPoints.length-1], {
-        icon: L.divIcon({ className: '', html: '<div style="color:#c4b5fd; font-size:12px; font-weight:bold; margin-top:-20px; white-space:nowrap;">🏁 South Delhi Dest</div>' })
-      }).addTo(map);
-
       leafletMap.current = map;
     }
 
@@ -124,29 +163,45 @@ export default function AQIMap({
     };
   }, []); // Run once
 
-  // Handle Route display
+  // Handle Origin/Dest Markers and Route Layer
   useEffect(() => {
     const map = leafletMap.current;
     if (!map) return;
 
+    // Remove old layers
+    if (originMarkerGroup.current) { originMarkerGroup.current.remove(); originMarkerGroup.current = null; }
+    if (destMarkerGroup.current) { destMarkerGroup.current.remove(); destMarkerGroup.current = null; }
+    if (stdRouteLayer.current) { stdRouteLayer.current.remove(); stdRouteLayer.current = null; }
+    if (freshRouteLayer.current) { freshRouteLayer.current.remove(); freshRouteLayer.current = null; }
+
+    // Draw Markers
+    const startPt = stdPoints[0];
+    const endPt = stdPoints[stdPoints.length-1];
+
+    originMarkerGroup.current = L.layerGroup([
+      L.circleMarker(startPt, { radius: 6, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1 }),
+      L.marker(startPt, { icon: L.divIcon({ className: '', html: `<div style="color:#93c5fd; font-size:12px; font-weight:bold; margin-top:-20px; white-space:nowrap;">📍 ${origin} Origin</div>` }) })
+    ]).addTo(map);
+
+    destMarkerGroup.current = L.layerGroup([
+      L.circleMarker(endPt, { radius: 6, color: '#a78bfa', fillColor: '#a78bfa', fillOpacity: 1 }),
+      L.marker(endPt, { icon: L.divIcon({ className: '', html: `<div style="color:#c4b5fd; font-size:12px; font-weight:bold; margin-top:-20px; white-space:nowrap;">🏁 ${destination} Dest</div>` }) })
+    ]).addTo(map);
+
+    // Dynamic map view to fit both points naturally
+    const bounds = L.latLngBounds([startPt, endPt]);
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12, animate: true });
+
     if (routeCalculated) {
-      if (!stdRouteLayer.current) {
-        stdRouteLayer.current = L.polyline(stdPoints, {
-          color: '#ef4444', weight: 4, opacity: 0.7, lineCap: 'round', lineJoin: 'round'
-        }).addTo(map);
-      }
-      if (!freshRouteLayer.current) {
-        freshRouteLayer.current = L.polyline(freshPoints, {
-          color: '#22c55e', weight: 4, opacity: 0.9, dashArray: '10, 10', lineCap: 'round', lineJoin: 'round'
-        }).addTo(map);
-      }
-    } else {
-      stdRouteLayer.current?.remove();
-      freshRouteLayer.current?.remove();
-      stdRouteLayer.current = null;
-      freshRouteLayer.current = null;
+      stdRouteLayer.current = L.polyline(stdPoints, {
+        color: '#ef4444', weight: 4, opacity: 0.7, lineCap: 'round', lineJoin: 'round'
+      }).addTo(map);
+
+      freshRouteLayer.current = L.polyline(freshPoints, {
+        color: '#22c55e', weight: 4, opacity: 0.9, dashArray: '10, 10', lineCap: 'round', lineJoin: 'round'
+      }).addTo(map);
     }
-  }, [routeCalculated]);
+  }, [routeCalculated, stdPoints, freshPoints, origin, destination]);
 
   // Handle Simulation Animation
   useEffect(() => {

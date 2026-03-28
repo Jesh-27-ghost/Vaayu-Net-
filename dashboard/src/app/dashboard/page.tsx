@@ -56,6 +56,7 @@ function generateAQIGrid(rows: number, cols: number, seed?: number[][]) {
 // ─── Main Page ───────────────────────────────────────────────────
 export default function FreshRouteDashboard() {
   // State
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [aqiGrid, setAqiGrid] = useState<number[][]>(() => generateAQIGrid(28, 48));
   const [routeCalculated, setRouteCalculated] = useState(false);
   const [simulationMode, setSimulationMode] = useState(false);
@@ -65,6 +66,7 @@ export default function FreshRouteDashboard() {
   const [cargoType, setCargoType] = useState('Vegetables');
   const [aqiSensitivity, setAqiSensitivity] = useState(70);
   const [savingsCount, setSavingsCount] = useState(0);
+  const [targetSavings, setTargetSavings] = useState(17200);
   const [activeModal, setActiveModal] = useState<'settings' | 'help' | 'profile' | null>(null);
 
   // Auto-refresh AQI grid
@@ -90,23 +92,29 @@ export default function FreshRouteDashboard() {
   // Savings counter animation
   useEffect(() => {
     if (!routeCalculated) return;
-    const target = 17200;
     const duration = 2000;
     const start = Date.now();
     const animate = () => {
       const elapsed = Date.now() - start;
       const progress = Math.min(elapsed / duration, 1);
       const ease = 1 - Math.pow(1 - progress, 3);
-      setSavingsCount(Math.round(target * ease));
+      setSavingsCount(Math.round(targetSavings * ease));
       if (progress < 1) requestAnimationFrame(animate);
     };
     animate();
-  }, [routeCalculated]);
+  }, [routeCalculated, targetSavings]);
 
   const handleCalculateRoutes = useCallback(() => {
-    setRouteCalculated(true);
-    setSimProgress(0);
-    setSavingsCount(0);
+    // Force a re-mount / re-draw of route lines by toggling false then true
+    setRouteCalculated(false);
+    setTimeout(() => {
+      setRouteCalculated(true);
+      setSimProgress(0);
+      setSavingsCount(0);
+      // Randomize savings slightly based on cargo so recalculate feels "real"
+      const base = 12000 + Math.floor(Math.random() * 8000);
+      setTargetSavings(base);
+    }, 400);
   }, []);
 
   const handleToggleSimulation = useCallback(() => {
@@ -133,7 +141,7 @@ export default function FreshRouteDashboard() {
       {/* Body */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Main Content */}
         <main
@@ -147,10 +155,12 @@ export default function FreshRouteDashboard() {
           }}
         >
           {/* Row 1: Stats */}
-          <StatsGrid routeCalculated={routeCalculated} aqiGrid={aqiGrid} />
+          <div style={{ display: (activeTab === 'dashboard' || activeTab === 'analytics') ? 'block' : 'none' }}>
+            <StatsGrid routeCalculated={routeCalculated} aqiGrid={aqiGrid} />
+          </div>
 
           {/* Row 2: Map + Right Panel */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 12, minHeight: 520 }}>
+          <div style={{ display: (activeTab === 'dashboard' || activeTab === 'routes' || activeTab === 'map') ? 'grid' : 'none', gridTemplateColumns: activeTab === 'map' ? '1fr' : '1fr 380px', gap: 12, minHeight: 520 }}>
             {/* Left Column: Map */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 520 }}>
               <AQIMap
@@ -160,53 +170,70 @@ export default function FreshRouteDashboard() {
                 simProgress={simProgress}
                 origin={origin}
                 destination={destination}
+                cargoType={cargoType}
               />
             </div>
 
             {/* Right Column: Panels */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                overflowY: 'auto',
-                minHeight: 0,
-              }}
-            >
-              <FreshnessMeter
-                routeCalculated={routeCalculated}
-                simulationMode={simulationMode}
-                simProgress={simProgress}
-              />
-              <RouteComparison routeCalculated={routeCalculated} savingsCount={savingsCount} />
-              <SimulationPanel
-                simulationMode={simulationMode}
-                simProgress={simProgress}
-                routeCalculated={routeCalculated}
-                onToggleSimulation={handleToggleSimulation}
-                onResetSimulation={handleResetSimulation}
-              />
-            </div>
+            {activeTab !== 'map' && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  overflowY: 'auto',
+                  minHeight: 0,
+                }}
+              >
+                <div style={{ display: (activeTab === 'dashboard' || activeTab === 'analytics') ? 'block' : 'none' }}>
+                  <FreshnessMeter
+                    routeCalculated={routeCalculated}
+                    simulationMode={simulationMode}
+                    simProgress={simProgress}
+                  />
+                </div>
+                <div style={{ display: (activeTab === 'dashboard' || activeTab === 'routes' || activeTab === 'analytics') ? 'block' : 'none' }}>
+                  <RouteComparison routeCalculated={routeCalculated} savingsCount={savingsCount} />
+                </div>
+                <div style={{ display: (activeTab === 'dashboard' || activeTab === 'fleet' || activeTab === 'alerts') ? 'block' : 'none' }}>
+                  <SimulationPanel
+                    simulationMode={simulationMode}
+                    simProgress={simProgress}
+                    routeCalculated={routeCalculated}
+                    onToggleSimulation={handleToggleSimulation}
+                    onResetSimulation={handleResetSimulation}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Row 3: Location Input */}
-          <LocationInput
-            origin={origin}
-            destination={destination}
-            cargoType={cargoType}
-            aqiSensitivity={aqiSensitivity}
-            onOriginChange={setOrigin}
-            onDestinationChange={setDestination}
-            onCargoChange={setCargoType}
-            onSensitivityChange={setAqiSensitivity}
-            onCalculate={handleCalculateRoutes}
-            routeCalculated={routeCalculated}
-          />
+          <div style={{ display: (activeTab === 'dashboard' || activeTab === 'routes') ? 'block' : 'none' }}>
+            <LocationInput
+              origin={origin}
+              destination={destination}
+              cargoType={cargoType}
+              aqiSensitivity={aqiSensitivity}
+              onOriginChange={setOrigin}
+              onDestinationChange={setDestination}
+              onCargoChange={setCargoType}
+              onSensitivityChange={setAqiSensitivity}
+              onCalculate={handleCalculateRoutes}
+              routeCalculated={routeCalculated}
+            />
+          </div>
 
           {/* Row 4: Fleet Tracker + Gemini */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 12 }}>
-            <FleetTracker />
-            <GeminiInsight />
+          <div style={{ display: (activeTab === 'dashboard' || activeTab === 'fleet' || activeTab === 'analytics' || activeTab === 'alerts') ? 'grid' : 'none', gridTemplateColumns: (activeTab === 'fleet' || activeTab === 'alerts' || activeTab === 'analytics') ? '1fr' : '1fr 380px', gap: 12 }}>
+            
+            <div style={{ display: (activeTab === 'dashboard' || activeTab === 'fleet' || activeTab === 'alerts') ? 'block' : 'none' }}>
+              <FleetTracker />
+            </div>
+
+            <div style={{ display: (activeTab === 'dashboard' || activeTab === 'analytics') ? 'block' : 'none' }}>
+              <GeminiInsight origin={origin} destination={destination} cargoType={cargoType} routeCalculated={routeCalculated} />
+            </div>
           </div>
 
           {/* Footer */}

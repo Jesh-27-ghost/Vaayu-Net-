@@ -72,9 +72,17 @@ const BOTTOM_ITEMS = [
   },
 ];
 
-export default function Sidebar() {
-  const [active, setActive] = useState('dashboard');
+interface SidebarProps {
+  activeTab: string;
+  onTabChange: (id: string) => void;
+}
+
+export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(true);
+
+  const handleNavClick = (id: string) => {
+    onTabChange(id);
+  };
 
   return (
     <aside
@@ -96,11 +104,11 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {NAV_ITEMS.map((item) => {
-          const isActive = active === item.id;
+          const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => setActive(item.id)}
+              onClick={() => handleNavClick(item.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',

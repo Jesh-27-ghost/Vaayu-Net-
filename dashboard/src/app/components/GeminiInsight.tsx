@@ -50,13 +50,22 @@ const INSIGHTS = [
   },
 ];
 
-export default function GeminiInsight() {
+export interface GeminiInsightProps {
+  origin?: string;
+  destination?: string;
+  cargoType?: string;
+  routeCalculated?: boolean;
+}
+
+export default function GeminiInsight({ origin, destination, cargoType, routeCalculated }: GeminiInsightProps) {
   const [activeInsight, setActiveInsight] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
   const [displayedText, setDisplayedText] = useState('');
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const [insightsRefactored, setInsights] = useState(INSIGHTS);
+  const [isLoading, setIsLoading] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const insight = INSIGHTS[activeInsight];
+  const insight = insightsRefactored[activeInsight];
 
   // Typewriter effect for message
   useEffect(() => {
@@ -79,12 +88,38 @@ export default function GeminiInsight() {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [activeInsight]);
+  }, [activeInsight, insightsRefactored]);
+
+  // Fetch from the API
+  useEffect(() => {
+    if (routeCalculated && origin && destination && cargoType) {
+      const fetchAI = async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch('/api/analyze', {
+            method: 'POST',
+            body: JSON.stringify({ origin, destination, cargoType, aqiExposure: '380 µg/m³' })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setInsights(prev => [data, ...prev].slice(0, 3)); // Keep top 3
+            setActiveInsight(0); // View the new one
+          }
+        } catch (error) {
+          console.error('Failed to grab AI insight', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      
+      fetchAI();
+    }
+  }, [routeCalculated, origin, destination, cargoType]);
 
   // Auto-cycle insights
   useEffect(() => {
     const t = setInterval(() => {
-      setActiveInsight((prev) => (prev + 1) % INSIGHTS.length);
+      setActiveInsight((prev) => (prev + 1) % insightsRefactored.length);
     }, 15000);
     return () => clearInterval(t);
   }, []);
@@ -130,6 +165,9 @@ export default function GeminiInsight() {
               ))}
             </div>
           )}
+          {isLoading && (
+            <span style={{ fontSize: 10, color: '#f1f5f9', fontWeight: 600, marginRight: 8 }}>ANALYZING...</span>
+          )}
           <span className="badge badge-purple">
             Gemini 2.0 Pro
           </span>
@@ -138,7 +176,7 @@ export default function GeminiInsight() {
 
       {/* Insight tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {INSIGHTS.map((ins, i) => (
+        {insightsRefactored.map((ins, i) => (
           <button
             key={i}
             onClick={() => setActiveInsight(i)}
